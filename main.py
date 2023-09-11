@@ -13,6 +13,9 @@ from osm_countries_gen import get_osm_countries
 
 
 async def main():
+    # ensure output directory exists
+    await GEOJSON_DIR.mkdir(exist_ok=True)
+
     countries, data_timestamp = await get_osm_countries()
 
     await validate_countries(countries)
