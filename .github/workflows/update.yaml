@@ -23,7 +23,7 @@ jobs:
 
       - name: Run main.py
         run: |
-          nix-shell --run "python main.py"
+          nix-shell --run "pipenv run python main.py"
 
       - name: Commit changes
         run: |

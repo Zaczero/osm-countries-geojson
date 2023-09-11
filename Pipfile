@@ -8,12 +8,12 @@ anyio = "*"
 brotlipy = "*"
 h2 = "*"
 httpx = "*"
+networkx = "*"
 numpy = "*"
 orjson = "*"
 scikit-learn = "*"
 shapely = "*"
 tqdm = "*"
-networkx = "*"
 
 [dev-packages]
 autopep8 = "*"
