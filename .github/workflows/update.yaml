@@ -1,0 +1,32 @@
+name: Update GeoJSON
+
+on:
+  schedule:
+    - cron: "0 0,12 * * *"
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v22
+        with:
+          nix_path: nixpkgs=channel:nixos-23.05
+          extra_nix_config: |
+            trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
+            substituters = https://cache.nixos.org/
+
+      - name: Run main.py
+        run: |
+          nix-shell --run "python main.py"
+
+      - name: Commit changes
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git commit -am "Update GeoJSON"
+          git push
