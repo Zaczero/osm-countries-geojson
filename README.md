@@ -6,7 +6,8 @@
 [![GitHub repo stars](https://shields.monicz.dev/github/stars/Zaczero/osm-countries-geojson?style=social)](https://github.com/Zaczero/osm-countries-geojson)
 
 » [Browse latest GeoJSON files](https://github.com/Zaczero/osm-countries-geojson/tree/main/geojson)
-_The number at the end indicates simplification; a smaller number means better quality._
+
+_↑ The number at the end indicates simplification; a smaller number means better quality._
 
 The GeoJSON files are updated daily, fetching the latest country information from OpenStreetMap.
 Additional validation is in place, which aborts GeoJSON updates if vandalism is detected.
