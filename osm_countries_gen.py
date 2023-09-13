@@ -25,8 +25,11 @@ def _connect_segments(segments: Sequence[tuple[tuple]]) -> Sequence[Sequence[tup
         node_count[node] += 1
 
     # validate that all segments are closed (i.e., start and end at intersections)
-    if any(node_count[s[0]] < 2 or node_count[s[-1]] < 2 for s in segments):
-        raise ValueError('Segments must be closed')
+    for s in segments:
+        node_id_start = s[0]
+        node_id_end = s[-1]
+        if node_count[node_id_start] < 2 or node_count[node_id_end] < 2:
+            raise ValueError(f'Segments must be closed (node/{node_id_start}, node/{node_id_end})')
 
     # node = intersection, node_count > 1
     # edge = segment between intersections
@@ -93,6 +96,10 @@ def _connect_segments(segments: Sequence[tuple[tuple]]) -> Sequence[Sequence[tup
             else:
                 merged_unordered.append([u, v])
 
+        if len(merged_unordered) < 2:
+            # this realistically will mean broken data: a single node, a small loop, etc.
+            raise Exception(f'Single-segment cycle ({c!r})')
+
         first = merged_unordered[0]
         second = merged_unordered[1]
 
@@ -135,11 +142,11 @@ async def get_osm_countries() -> tuple[Sequence[OSMCountry], float]:
             elif member['role'] == 'inner':
                 inner_segments.append(tuple((g['lon'], g['lat']) for g in member['geometry']))
 
-        outer_polys = tuple(Polygon(s) for s in _connect_segments(outer_segments))
-        inner_polys = tuple(Polygon(s) for s in _connect_segments(inner_segments))
-        geometry: dict[float, Polygon | MultiPolygon] = {}
-
         try:
+            outer_polys = tuple(Polygon(s) for s in _connect_segments(outer_segments))
+            inner_polys = tuple(Polygon(s) for s in _connect_segments(inner_segments))
+            geometry: dict[float, Polygon | MultiPolygon] = {}
+
             for q in GEOJSON_QUALITIES:
                 outer_simple = (p.simplify(q) for p in outer_polys)
                 outer_simple = tuple(p for p in outer_simple if p.is_valid)
