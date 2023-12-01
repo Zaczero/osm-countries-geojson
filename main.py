@@ -1,15 +1,23 @@
 import gzip
+import pathlib
+from collections.abc import Callable
+from concurrent.futures import Future, ProcessPoolExecutor
 from decimal import Decimal
 
 import anyio
 import brotli
 import orjson
-from shapely.geometry import mapping
+from anyio import Path
 from tqdm import tqdm
 
 from config import GEOJSON_DIR, GEOJSON_QUALITIES
 from natural_earth import validate_countries
 from osm_countries_gen import get_osm_countries
+
+
+def compress_and_write(path: Path, data: bytes, func: Callable[..., bytes], *args, **kwargs) -> None:
+    buffer = func(data, *args, **kwargs)
+    pathlib.Path(path).write_bytes(buffer)
 
 
 async def main():
@@ -20,48 +28,71 @@ async def main():
 
     await validate_countries(countries)
 
-    for q in tqdm(GEOJSON_QUALITIES, desc='Writing GeoJSON'):
-        q_str = f'{Decimal(str(q)):f}'.replace('.', '-')
-        path = GEOJSON_DIR / f'osm-countries-{q_str}.geojson'
+    with ProcessPoolExecutor() as pool:
+        futures: list[Future] = []
 
-        features = []
+        for q in tqdm(GEOJSON_QUALITIES, desc='Writing GeoJSON'):
+            q_str = f'{Decimal(str(q)):f}'.replace('.', '-')
+            path = GEOJSON_DIR / f'osm-countries-{q_str}.geojson'
 
-        for country in countries:
-            features.append({
-                'type': 'Feature',
-                'properties': {
-                    'tags': country.tags,
-                    'timestamp': data_timestamp,
-                    'representative_point': mapping(country.representative_point),
+            features = tuple(
+                {
+                    'type': 'Feature',
+                    'properties': {
+                        'tags': country.tags,
+                        'timestamp': data_timestamp,
+                        'representative_point': country.representative_point,
+                    },
+                    'geometry': country.geometry[q],
+                }
+                for country in countries
+            )
+
+            data = {
+                'type': 'FeatureCollection',
+                'name': path.stem,
+                'crs': {
+                    'type': 'name',
+                    'properties': {
+                        'name': 'urn:ogc:def:crs:OGC:1.3:CRS84',
+                    },
                 },
-                'geometry': mapping(country.geometry[q]),
-            })
+                'features': features,
+            }
 
-        data = {
-            'type': 'FeatureCollection',
-            'name': path.stem,
-            'crs': {
-                'type': 'name',
-                'properties': {
-                    'name': 'urn:ogc:def:crs:OGC:1.3:CRS84',
-                },
-            },
-            'features': features,
-        }
+            buffer = orjson.dumps(data)
 
-        buffer = orjson.dumps(data)
+            # uncompressed
+            await path.write_bytes(buffer)
 
-        # uncompressed
-        await path.write_bytes(buffer)
+            # gzip compressed
+            gz_path = path.with_suffix('.geojson.gz')
+            futures.append(
+                pool.submit(
+                    compress_and_write,
+                    gz_path,
+                    buffer,
+                    gzip.compress,
+                    compresslevel=9,
+                )
+            )
 
-        # gzip compressed
-        gz_path = path.with_suffix('.geojson.gz')
-        await gz_path.write_bytes(gzip.compress(buffer, compresslevel=9))
+            # brotli compressed
+            br_path = path.with_suffix('.geojson.br')
+            futures.append(
+                pool.submit(
+                    compress_and_write,
+                    br_path,
+                    buffer,
+                    brotli.compress,
+                    mode=brotli.MODE_TEXT,
+                    quality=11,
+                )
+            )
 
-        # brotli compressed
-        br_path = path.with_suffix('.geojson.br')
-        await br_path.write_bytes(brotli.compress(buffer, mode=brotli.MODE_TEXT, quality=11))
+        for future in tqdm(futures, desc='Compressing GeoJSON'):
+            future.result()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     anyio.run(main)

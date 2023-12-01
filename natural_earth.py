@@ -1,7 +1,9 @@
+from collections.abc import Sequence
 from datetime import timedelta
-from typing import Sequence
 
+from shapely import unary_union
 from shapely.geometry import shape
+from shapely.ops import BaseGeometry
 from tqdm import tqdm
 
 from config import BEST_GEOJSON_QUALITY, COUNTRIES_GEOJSON_URL
@@ -19,17 +21,25 @@ async def _get_countries() -> Sequence[dict]:
 
 async def validate_countries(countries: Sequence[OSMCountry]) -> None:
     ne_countries = await _get_countries()
-    ne_countries = tuple(c for c in ne_countries if not any(
-        n in c['properties']['NAME'] for n in (
-            # ignore some entries
-            'Antarctica',
-            'Sahara',
-        )))
+    ne_countries = tuple(
+        c
+        for c in ne_countries
+        if not any(
+            n in c['properties']['NAME']
+            for n in (
+                # ignore some entries
+                'Antarctica',
+                'Sahara',
+            )
+        )
+    )
+
+    geometry_union: BaseGeometry = unary_union([shape(c.geometry[BEST_GEOJSON_QUALITY]) for c in countries])
 
     # validate country geometries by checking if the representative point is inside the geometry
     for ne_country in tqdm(ne_countries, desc='Validating'):
         ne_geom = shape(ne_country['geometry'])
         ne_point = ne_geom.representative_point()
 
-        if not any(c.geometry[BEST_GEOJSON_QUALITY].contains(ne_point) for c in countries):
+        if not geometry_union.contains(ne_point):
             raise ValueError(f'Country geometry not found: {ne_country["properties"]["NAME"]!r}')
