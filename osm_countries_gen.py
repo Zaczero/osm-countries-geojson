@@ -1,21 +1,21 @@
 from collections import defaultdict
+from collections.abc import Sequence
 from itertools import chain, cycle, islice, pairwise
-from typing import Sequence
 
 import networkx as nx
 import numpy as np
-from shapely.geometry import MultiPolygon, Polygon
-from shapely.ops import unary_union
+import topojson as tp
+from shapely import Polygon
+from shapely.geometry import mapping, shape
+from shapely.ops import BaseGeometry, unary_union
+from topojson.utils import serialize_as_geojson
 from tqdm import tqdm
 
 from config import BEST_GEOJSON_QUALITY, GEOJSON_QUALITIES
 from models.osm_country import OSMCountry
 from overpass import query_overpass
 
-_QUERY = (
-    'rel[boundary=administrative][admin_level=2]["ISO3166-1"][name];'
-    'out geom qt;'
-)
+_QUERY = 'rel[boundary=administrative][admin_level=2]["ISO3166-1"][name];' 'out geom qt;'
 
 
 def _connect_segments(segments: Sequence[tuple[tuple]]) -> Sequence[Sequence[tuple]]:
@@ -33,7 +33,7 @@ def _connect_segments(segments: Sequence[tuple[tuple]]) -> Sequence[Sequence[tup
 
     # node = intersection, node_count > 1
     # edge = segment between intersections
-    G = nx.DiGraph()
+    graph = nx.DiGraph()
 
     # build the graph
     for segment in segments:
@@ -44,23 +44,23 @@ def _connect_segments(segments: Sequence[tuple[tuple]]) -> Sequence[Sequence[tup
             if node_count[node] > 1:
                 if subsegment_start:
                     if len(subsegment) == 0:
-                        G.add_edge(subsegment_start, node)
-                        G.add_edge(node, subsegment_start)
+                        graph.add_edge(subsegment_start, node)
+                        graph.add_edge(node, subsegment_start)
                     elif len(subsegment) == 1:
                         first = subsegment[0]
-                        G.add_edge(subsegment_start, first)
-                        G.add_edge(first, node)
-                        G.add_edge(node, first)
-                        G.add_edge(first, subsegment_start)
+                        graph.add_edge(subsegment_start, first)
+                        graph.add_edge(first, node)
+                        graph.add_edge(node, first)
+                        graph.add_edge(first, subsegment_start)
                     else:
                         first = subsegment[0]
                         last = subsegment[-1]
-                        G.add_edge(subsegment_start, first)
-                        G.add_edge(first, last, subsegment=subsegment)
-                        G.add_edge(last, node)
-                        G.add_edge(node, last)
-                        G.add_edge(last, first, subsegment=subsegment[::-1])
-                        G.add_edge(first, subsegment_start)
+                        graph.add_edge(subsegment_start, first)
+                        graph.add_edge(first, last, subsegment=subsegment)
+                        graph.add_edge(last, node)
+                        graph.add_edge(node, last)
+                        graph.add_edge(last, first, subsegment=subsegment[::-1])
+                        graph.add_edge(first, subsegment_start)
                 subsegment = []
                 subsegment_start = node
             # normal node
@@ -75,9 +75,12 @@ def _connect_segments(segments: Sequence[tuple[tuple]]) -> Sequence[Sequence[tup
         min_idx = np.argmin(segment, axis=0)[0]
 
         # normalize starting point
-        aligned = tuple(chain(
-            islice(segment, min_idx, len(segment) - 1),
-            islice(segment, min_idx + 1)))
+        aligned = tuple(
+            chain(
+                islice(segment, min_idx, len(segment) - 1),
+                islice(segment, min_idx + 1),
+            )
+        )
 
         # normalize orientation
         if segment[-1] < segment[1]:
@@ -85,13 +88,13 @@ def _connect_segments(segments: Sequence[tuple[tuple]]) -> Sequence[Sequence[tup
 
         return aligned
 
-    for c in nx.simple_cycles(G):
+    for c in nx.simple_cycles(graph):
         c = tuple(islice(cycle(c), len(c) + 1))  # close the cycle
 
         merged_unordered: list[list] = []
 
         for u, v in pairwise(c):
-            if subsegment := G[u][v].get('subsegment'):
+            if subsegment := graph[u][v].get('subsegment'):
                 merged_unordered.append(subsegment)
             else:
                 merged_unordered.append([u, v])
@@ -104,7 +107,7 @@ def _connect_segments(segments: Sequence[tuple[tuple]]) -> Sequence[Sequence[tup
         second = merged_unordered[1]
 
         # proper orientation of the first segment
-        if first[0] in (second[0], second[-1]):
+        if first[0] in (second[0], second[-1]):  # noqa: SIM108
             merged = first[::-1]
         else:
             merged = first
@@ -127,7 +130,8 @@ def _connect_segments(segments: Sequence[tuple[tuple]]) -> Sequence[Sequence[tup
 async def get_osm_countries() -> tuple[Sequence[OSMCountry], float]:
     print('Querying Overpass API')
     countries, data_timestamp = await query_overpass(_QUERY, timeout=300, must_return=True)
-    result = []
+    countries_geoms: list[BaseGeometry] = []
+    countries_geoms_q: list[dict[float, dict]] = []
 
     for country in tqdm(countries, desc='Processing geometry'):
         outer_segments = []
@@ -143,32 +147,46 @@ async def get_osm_countries() -> tuple[Sequence[OSMCountry], float]:
                 inner_segments.append(tuple((g['lon'], g['lat']) for g in member['geometry']))
 
         try:
-            outer_polys = tuple(Polygon(s) for s in _connect_segments(outer_segments))
-            inner_polys = tuple(Polygon(s) for s in _connect_segments(inner_segments))
-            geometry: dict[float, Polygon | MultiPolygon] = {}
+            outer_polys = (Polygon(s) for s in _connect_segments(outer_segments))
+            inner_polys = (Polygon(s) for s in _connect_segments(inner_segments))
 
-            for q in GEOJSON_QUALITIES:
-                outer_simple = (p.simplify(q) for p in outer_polys)
-                outer_simple = tuple(p for p in outer_simple if p.is_valid)
-                inner_simple = (p.simplify(q) for p in inner_polys)
-                inner_simple = tuple(p for p in inner_simple if p.is_valid)
+            outer_simple = tuple(p for p in outer_polys if p.is_valid)
+            inner_simple = tuple(p for p in inner_polys if p.is_valid)
 
-                if not outer_simple:
-                    raise Exception('No outer polygons')
+            if not outer_simple:
+                raise Exception('No outer polygons')
 
-                outer_union = unary_union(outer_simple)
-                inner_union = unary_union(inner_simple)
-                geometry[q] = outer_union.difference(inner_union)
+            outer_union: BaseGeometry = unary_union(outer_simple)
+            inner_union: BaseGeometry = unary_union(inner_simple)
+            countries_geoms.append(outer_union.difference(inner_union))
+            countries_geoms_q.append({})
+
         except Exception as e:
             country_name = country['tags'].get('name', '??')
             raise Exception(f'Error processing {country_name}') from e
 
-        representative_point = geometry[BEST_GEOJSON_QUALITY].representative_point()
+    topo = tp.Topology(countries_geoms, prequantize=False)
+    countries_geoms = None  # free memory
 
-        result.append(OSMCountry(
-            tags=country['tags'],
-            geometry=geometry,
-            representative_point=representative_point,
-        ))
+    for q in tqdm(sorted(GEOJSON_QUALITIES), desc='Simplifying geometry'):
+        topo.toposimplify(q, inplace=True)
+        features = serialize_as_geojson(topo.to_dict())['features']
+        for country_geoms_q, feature in zip(countries_geoms_q, features, strict=True):
+            country_geoms_q[q] = feature['geometry']
 
-    return tuple(result), data_timestamp
+    topo = None  # free memory
+    result = []
+
+    for country, country_geoms_q in zip(countries, countries_geoms_q, strict=True):
+        tags = country['tags']
+        point = shape(country_geoms_q[BEST_GEOJSON_QUALITY]).representative_point()
+
+        result.append(
+            OSMCountry(
+                tags=tags,
+                geometry=country_geoms_q,
+                representative_point=mapping(point),
+            )
+        )
+
+    return result, data_timestamp

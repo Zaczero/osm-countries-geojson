@@ -13,6 +13,7 @@ numpy = "*"
 orjson = "*"
 scikit-learn = "*"
 shapely = "*"
+topojson = "*"
 tqdm = "*"
 
 [dev-packages]

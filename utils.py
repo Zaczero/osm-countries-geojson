@@ -1,10 +1,8 @@
 import functools
 import time
 import traceback
-from contextlib import contextmanager
 from datetime import timedelta
 from math import inf
-from typing import Generator
 
 import anyio
 import httpx
@@ -13,10 +11,7 @@ from config import USER_AGENT
 
 
 def retry_exponential(timeout: timedelta | None, *, start: float = 1):
-    if timeout is None:
-        timeout_seconds = inf
-    else:
-        timeout_seconds = timeout.total_seconds()
+    timeout_seconds = timeout.total_seconds() if timeout else inf
 
     def decorator(func):
         @functools.wraps(func)
@@ -36,6 +31,7 @@ def retry_exponential(timeout: timedelta | None, *, start: float = 1):
                     sleep = min(sleep * 2, 1800)  # max 30 minutes
 
         return wrapper
+
     return decorator
 
 
@@ -44,4 +40,7 @@ def get_http_client(base_url: str = '') -> httpx.AsyncClient:
         base_url=base_url,
         headers={'User-Agent': USER_AGENT},
         timeout=httpx.Timeout(60, connect=15),
+        follow_redirects=True,
+        http1=True,
+        http2=True,
     )
