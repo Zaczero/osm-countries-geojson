@@ -34,7 +34,7 @@ async def validate_countries(countries: Sequence[OSMCountry]) -> None:
         )
     )
 
-    geometry_union: BaseGeometry = unary_union([shape(c.geometry[BEST_GEOJSON_QUALITY]) for c in countries])
+    geometry_union: BaseGeometry = unary_union([c.geometry[BEST_GEOJSON_QUALITY] for c in countries])
 
     # validate country geometries by checking if the representative point is inside the geometry
     for ne_country in tqdm(ne_countries, desc='Validating'):
