@@ -13,7 +13,7 @@ with pkgs; let
   devBuildInputs = [
     gnumake
     pipenv
-    unstable.ruff
+    ruff
   ];
 
   commonShellHook = ''
