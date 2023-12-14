@@ -8,6 +8,7 @@ import anyio
 import brotli
 import orjson
 from anyio import Path
+from shapely.geometry import mapping
 from tqdm import tqdm
 
 from config import GEOJSON_DIR, GEOJSON_QUALITIES
@@ -43,7 +44,7 @@ async def main():
                         'timestamp': data_timestamp,
                         'representative_point': country.representative_point,
                     },
-                    'geometry': country.geometry[q],
+                    'geometry': mapping(country.geometry[q]),
                 }
                 for country in countries
             )

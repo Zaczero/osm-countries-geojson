@@ -7,7 +7,7 @@ import numpy as np
 import topojson as tp
 from shapely import Polygon
 from shapely.geometry import mapping, shape
-from shapely.ops import BaseGeometry, unary_union
+from shapely.ops import BaseGeometry, orient, unary_union
 from topojson.utils import serialize_as_geojson
 from tqdm import tqdm
 
@@ -131,7 +131,7 @@ async def get_osm_countries() -> tuple[Sequence[OSMCountry], float]:
     print('Querying Overpass API')
     countries, data_timestamp = await query_overpass(_QUERY, timeout=300, must_return=True)
     countries_geoms: list[BaseGeometry] = []
-    countries_geoms_q: list[dict[float, dict]] = []
+    countries_geoms_q: list[dict[float, BaseGeometry]] = []
 
     for country in tqdm(countries, desc='Processing geometry'):
         outer_segments = []
@@ -172,14 +172,14 @@ async def get_osm_countries() -> tuple[Sequence[OSMCountry], float]:
         topo.toposimplify(q, inplace=True)
         features = serialize_as_geojson(topo.to_dict())['features']
         for country_geoms_q, feature in zip(countries_geoms_q, features, strict=True):
-            country_geoms_q[q] = feature['geometry']
+            country_geoms_q[q] = orient(shape(feature['geometry']).buffer(0))  # fix geometry
 
     topo = None  # free memory
     result = []
 
     for country, country_geoms_q in zip(countries, countries_geoms_q, strict=True):
         tags = country['tags']
-        point = shape(country_geoms_q[BEST_GEOJSON_QUALITY]).representative_point()
+        point = country_geoms_q[BEST_GEOJSON_QUALITY].representative_point()
 
         result.append(
             OSMCountry(
