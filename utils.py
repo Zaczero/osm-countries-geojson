@@ -2,7 +2,6 @@ import functools
 import time
 import traceback
 from datetime import timedelta
-from math import inf
 
 import anyio
 import httpx
@@ -11,7 +10,7 @@ from config import USER_AGENT
 
 
 def retry_exponential(timeout: timedelta | None, *, start: float = 1):
-    timeout_seconds = timeout.total_seconds() if timeout else inf
+    timeout_seconds = timeout.total_seconds() if timeout else float('inf')
 
     def decorator(func):
         @functools.wraps(func)

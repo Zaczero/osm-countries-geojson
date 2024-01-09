@@ -11,19 +11,23 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install Nix
-        uses: cachix/install-nix-action@v22
+        uses: cachix/install-nix-action@v24
         with:
-          nix_path: nixpkgs=channel:nixos-23.05
+          nix_path: nixpkgs=channel:nixpkgs-23.11-darwin
           extra_nix_config: |
             trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
             substituters = https://cache.nixos.org/
 
+      - name: Install dependencies
+        run: |
+          nix-shell --pure --run true
+
       - name: Run main.py
         run: |
-          nix-shell --run "pipenv run python main.py"
+          nix-shell --pure --run "python main.py"
 
       - name: Commit changes
         run: |

@@ -1,7 +1,7 @@
 from anyio import Path
 
 NAME = 'osm-countries-geojson'
-VERSION = '1.0'
+VERSION = '1.1'
 WEBSITE = 'https://github.com/Zaczero/osm-countries-geojson'
 USER_AGENT = f'{NAME}/{VERSION} (+{WEBSITE})'
 
