@@ -6,7 +6,7 @@
 [![Support my work](https://shields.monicz.dev/badge/%E2%99%A5%EF%B8%8F%20Support%20my%20work-purple)](https://monicz.dev/#support-my-work)
 [![GitHub repo stars](https://shields.monicz.dev/github/stars/Zaczero/osm-countries-geojson?style=social)](https://github.com/Zaczero/osm-countries-geojson)
 
-» [Browse latest GeoJSON files](https://github.com/Zaczero/osm-countries-geojson/tree/main/geojson)
+» [Browse latest GeoJSON files](https://osm-countries-geojson.monicz.dev)
 
 _↑ The number at the end indicates simplification; a smaller number means better quality._
 
