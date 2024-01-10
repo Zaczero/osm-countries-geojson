@@ -25,13 +25,25 @@ jobs:
         run: |
           nix-shell --pure --run true
 
-      - name: Run main.py
+      - name: Generate GeoJSON
         run: |
           nix-shell --pure --run "python main.py"
+
+      - name: Remove files larger than 100MB
+        run: |
+          find geojson -type f -size +100M -delete
 
       - name: Commit changes
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
           git commit -am "Update GeoJSON"
+
+      - name: Clean git history
+        run: |
+          nix-shell --pure -p bfg-repo-cleaner --run "bfg --delete-folders geojson"
+          git reflog expire --expire=now --all && git gc --prune=now --aggressive
+
+      - name: Push changes
+        run: |
           git push
