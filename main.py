@@ -1,24 +1,37 @@
 import gzip
 import pathlib
-from collections.abc import Callable
 from concurrent.futures import Future, ProcessPoolExecutor
 from decimal import Decimal
 
 import anyio
-import brotli
+import brotlicffi as brotli
 import orjson
 from anyio import Path
 from shapely.geometry import mapping
 from tqdm import tqdm
+from zstandard import ZstdCompressor
 
 from config import GEOJSON_DIR, GEOJSON_QUALITIES
 from natural_earth import validate_countries
 from osm_countries_gen import get_osm_countries
 
 
-def compress_and_write(path: Path, data: bytes, func: Callable[..., bytes], *args, **kwargs) -> None:
-    buffer = func(data, *args, **kwargs)
-    pathlib.Path(path).write_bytes(buffer)
+def compress_brotli(path: Path, data: bytes) -> None:
+    out_path = path.with_suffix('.geojson.br')
+    buffer = brotli.compress(data, mode=brotli.MODE_TEXT, quality=11)
+    pathlib.Path(out_path).write_bytes(buffer)
+
+
+def compress_gzip(path: Path, data: bytes) -> None:
+    out_path = path.with_suffix('.geojson.gz')
+    buffer = gzip.compress(data, compresslevel=9)
+    pathlib.Path(out_path).write_bytes(buffer)
+
+
+def compress_zstd(path: Path, data: bytes) -> None:
+    out_path = path.with_suffix('.geojson.zst')
+    buffer = ZstdCompressor(level=22).compress(data)
+    pathlib.Path(out_path).write_bytes(buffer)
 
 
 async def main():
@@ -66,32 +79,12 @@ async def main():
             # uncompressed
             await path.write_bytes(buffer)
 
-            # gzip compressed
-            gz_path = path.with_suffix('.geojson.gz')
-            futures.append(
-                pool.submit(
-                    compress_and_write,
-                    gz_path,
-                    buffer,
-                    gzip.compress,
-                    compresslevel=9,
-                )
-            )
+            futures.append(pool.submit(compress_brotli, path, buffer))
+            futures.append(pool.submit(compress_gzip, path, buffer))
+            futures.append(pool.submit(compress_zstd, path, buffer))
 
-            # brotli compressed
-            br_path = path.with_suffix('.geojson.br')
-            futures.append(
-                pool.submit(
-                    compress_and_write,
-                    br_path,
-                    buffer,
-                    brotli.compress,
-                    mode=brotli.MODE_TEXT,
-                    quality=11,
-                )
-            )
-
-        for future in tqdm(futures, desc='Compressing GeoJSON'):
+        print('Compressing GeoJSON files...')
+        for future in futures:
             future.result()
 
 

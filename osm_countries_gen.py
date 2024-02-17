@@ -15,7 +15,7 @@ from config import BEST_GEOJSON_QUALITY, GEOJSON_QUALITIES
 from models.osm_country import OSMCountry
 from overpass import query_overpass
 
-_QUERY = 'rel[boundary=administrative][admin_level=2]["ISO3166-1"][name];' 'out geom qt;'
+_QUERY = 'rel[boundary=administrative][admin_level=2]["ISO3166-1"][name];out geom qt;'
 
 
 def _connect_segments(segments: Sequence[tuple[tuple]]) -> Sequence[Sequence[tuple]]:
