@@ -5,7 +5,7 @@ from decimal import Decimal
 
 import anyio
 import brotlicffi as brotli
-import orjson
+import msgspec
 from anyio import Path
 from shapely.geometry import mapping
 from tqdm import tqdm
@@ -74,7 +74,7 @@ async def main():
                 'features': features,
             }
 
-            buffer = orjson.dumps(data)
+            buffer = msgspec.json.encode(data)
 
             # uncompressed
             await path.write_bytes(buffer)
