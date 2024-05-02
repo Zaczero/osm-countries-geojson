@@ -4,7 +4,7 @@ from concurrent.futures import Future, ProcessPoolExecutor
 from decimal import Decimal
 
 import anyio
-import brotlicffi as brotli
+import brotli
 import msgspec
 from anyio import Path
 from shapely.geometry import mapping
