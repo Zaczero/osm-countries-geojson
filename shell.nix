@@ -1,7 +1,7 @@
 let
   # Currently using nixpkgs-unstable
   # Update with `nixpkgs-update` command
-  pkgs = import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/bcd44e224fd68ce7d269b4f44d24c2220fd821e7.tar.gz") { };
+  pkgs = import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/4284c2b73c8bce4b46a6adf23e16d9e2ec8da4bb.tar.gz") { };
 
   pythonLibs = with pkgs; [
     stdenv.cc.cc.lib
@@ -31,7 +31,7 @@ let
     '')
   ];
 
-  shell' = with pkgs; ''
+  shell' = ''
     current_python=$(readlink -e .venv/bin/python || echo "")
     current_python=''${current_python%/bin/*}
     [ "$current_python" != "${wrappedPython}" ] && rm -r .venv
@@ -56,7 +56,7 @@ let
     fi
   '';
 in
-pkgs.mkShell {
+pkgs.mkShellNoCC {
   buildInputs = packages';
   shellHook = shell';
 }
