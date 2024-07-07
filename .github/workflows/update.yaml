@@ -67,12 +67,13 @@ jobs:
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
+          git add --all
 
           last_author=$(git log -1 --pretty=format:"%an")
           if [ "$last_author" != "github-actions" ]; then
-            git commit -am "Update GeoJSON"
+            git commit -m "Update GeoJSON"
             git push
           else
-            git commit --amend -am "Update GeoJSON"
+            git commit --amend -m "Update GeoJSON"
             git push --force-with-lease
           fi
