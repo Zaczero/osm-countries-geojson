@@ -12,6 +12,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Install Nix
         uses: cachix/install-nix-action@v27
@@ -35,11 +38,13 @@ jobs:
         run: |
           nix-store --import < /tmp/nix-cache
 
-      - name: Cache Python packages
+      - name: Cache Python venv
         uses: actions/cache@v4
         with:
           key: python-${{ runner.os }}-${{ hashFiles('poetry.lock') }}
-          path: .venv
+          path: |
+            ~/.cache/pypoetry
+            .venv
 
       - name: Install dependencies
         run: |
@@ -52,7 +57,7 @@ jobs:
 
       - name: Generate GeoJSON
         run: |
-          nix-shell --pure --run "python main.py"
+          nix-shell --pure --run "python main.py && compress-geojson"
 
       - name: Delete files larger than 100MB
         run: |

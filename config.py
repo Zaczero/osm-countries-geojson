@@ -1,4 +1,4 @@
-from anyio import Path
+from pathlib import Path
 
 NAME = 'osm-countries-geojson'
 VERSION = '1.2.0'

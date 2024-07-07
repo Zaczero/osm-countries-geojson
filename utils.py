@@ -1,9 +1,9 @@
+import asyncio
 import functools
 import time
 import traceback
 from datetime import timedelta
 
-import anyio
 import httpx
 
 from config import USER_AGENT
@@ -26,7 +26,7 @@ def retry_exponential(timeout: timedelta | None, *, start: float = 1):
                     traceback.print_exc()
                     if (time.perf_counter() + sleep) - ts > timeout_seconds:
                         raise
-                    await anyio.sleep(sleep)
+                    await asyncio.sleep(sleep)
                     sleep = min(sleep * 2, 1800)  # max 30 minutes
 
         return wrapper
