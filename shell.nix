@@ -21,18 +21,19 @@ let
     ruff
 
     findutils
-    pigz
+    zopfli
     brotli
     zstd
 
     (writeShellScriptBin "compress-geojson" ''
       set -e
       echo "Compressing GeoJSON files..."
+      rm -f geojson/*.geojson.{gz,br,zst}
       files=$(find geojson -type f -name '*.geojson')
-      pigz -11 --force --keep $files &
       for file in $files; do
-        brotli --best --force "$file" &
-        zstd --quiet --ultra -22 --force -T0 "$file" &
+        zopfli "$file" &
+        brotli --best "$file" &
+        zstd --no-progress --ultra -22 --single-thread "$file" &
       done
       wait
     '')
