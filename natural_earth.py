@@ -3,11 +3,11 @@ from datetime import timedelta
 
 from shapely import unary_union
 from shapely.geometry import shape
-from shapely.ops import BaseGeometry
+from shapely.geometry.base import BaseGeometry
 from tqdm import tqdm
 
 from config import BEST_GEOJSON_QUALITY, COUNTRIES_GEOJSON_URL
-from models.osm_country import OSMCountry
+from osm_countries_gen import OSMCountry
 from utils import get_http_client, retry_exponential
 
 

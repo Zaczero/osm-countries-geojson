@@ -1,19 +1,25 @@
 from collections import defaultdict
 from collections.abc import Sequence
 from itertools import chain, cycle, islice, pairwise
+from typing import NamedTuple
 
 import networkx as nx
 import numpy as np
-import topojson as tp
 from shapely import Polygon
 from shapely.geometry import mapping, shape
-from shapely.ops import BaseGeometry, orient, unary_union
-from topojson.utils import serialize_as_geojson
+from shapely.geometry.base import BaseGeometry
+from shapely.ops import orient, unary_union
 from tqdm import tqdm
 
 from config import BEST_GEOJSON_QUALITY, GEOJSON_QUALITIES
-from models.osm_country import OSMCountry
 from overpass import query_overpass
+
+
+class OSMCountry(NamedTuple):
+    tags: dict[str, str]
+    geometry: dict[float, BaseGeometry]
+    representative_point: dict
+
 
 _QUERY = 'rel[boundary~"^(administrative|disputed)$"][admin_level=2]["ISO3166-1"][name];out geom qt;'
 
@@ -166,7 +172,7 @@ async def get_osm_countries() -> tuple[Sequence[OSMCountry], float]:
             raise Exception(f'Error processing {country_name}') from e
 
     topo = tp.Topology(countries_geoms, prequantize=False)
-    countries_geoms = None  # free memory
+    del countries_geoms  # free memory
 
     for q in tqdm(sorted(GEOJSON_QUALITIES), desc='Simplifying geometry'):
         topo.toposimplify(q, inplace=True)
@@ -174,7 +180,7 @@ async def get_osm_countries() -> tuple[Sequence[OSMCountry], float]:
         for country_geoms_q, feature in zip(countries_geoms_q, features, strict=True):
             country_geoms_q[q] = orient(shape(feature['geometry']).buffer(0))  # fix geometry
 
-    topo = None  # free memory
+    del topo  # free memory
     result = []
 
     for country, country_geoms_q in zip(countries, countries_geoms_q, strict=True):

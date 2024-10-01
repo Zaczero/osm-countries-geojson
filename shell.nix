@@ -1,6 +1,6 @@
 let
   # Update with `nixpkgs-update` command
-  pkgs = import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/4284c2b73c8bce4b46a6adf23e16d9e2ec8da4bb.tar.gz") { };
+  pkgs = import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/28b5b8af91ffd2623e995e20aee56510db49001a.tar.gz") { };
 
   pythonLibs = with pkgs; [
     stdenv.cc.cc.lib
@@ -17,7 +17,7 @@ let
 
   packages' = with pkgs; [
     python'
-    poetry
+    uv
     ruff
 
     findutils
@@ -39,34 +39,39 @@ let
     '')
     (writeShellScriptBin "nixpkgs-update" ''
       set -e
-      hash=$(git ls-remote https://github.com/NixOS/nixpkgs nixpkgs-unstable | cut -f 1)
+      hash=$(
+        curl --silent --location \
+        https://prometheus.nixos.org/api/v1/query \
+        -d "query=channel_revision{channel=\"nixpkgs-unstable\"}" | \
+        grep --only-matching --extended-regexp "[0-9a-f]{40}")
       sed -i -E "s|/nixpkgs/archive/[0-9a-f]{40}\.tar\.gz|/nixpkgs/archive/$hash.tar.gz|" shell.nix
       echo "Nixpkgs updated to $hash"
     '')
   ];
 
   shell' = ''
+    export PYTHONNOUSERSITE=1
+    export TZ=UTC
+
     current_python=$(readlink -e .venv/bin/python || echo "")
     current_python=''${current_python%/bin/*}
-    [ "$current_python" != "${python'}" ] && rm -r .venv
+    [ "$current_python" != "${python'}" ] && rm -rf .venv/
 
     echo "Installing Python dependencies"
-    export POETRY_VIRTUALENVS_IN_PROJECT=1
-    poetry env use "${python'}/bin/python"
-    poetry install --no-root --compile
+    export UV_COMPILE_BYTECODE=1
+    export UV_PYTHON="${python'}/bin/python"
+    uv sync --frozen
 
     echo "Activating Python virtual environment"
     source .venv/bin/activate
-
-    # Development environment variables
-    export PYTHONNOUSERSITE=1
-    export TZ=UTC
 
     if [ -f .env ]; then
       echo "Loading .env file"
       set -o allexport
       source .env set
       set +o allexport
+    else
+      echo "Skipped loading .env file (not found)"
     fi
   '';
 in

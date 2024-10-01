@@ -40,6 +40,4 @@ def get_http_client(base_url: str = '') -> httpx.AsyncClient:
         headers={'User-Agent': USER_AGENT},
         timeout=httpx.Timeout(60, connect=15),
         follow_redirects=True,
-        http1=True,
-        http2=True,
     )
