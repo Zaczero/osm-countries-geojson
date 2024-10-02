@@ -1,21 +1,34 @@
 from collections import defaultdict
 from collections.abc import Sequence
 from itertools import chain, cycle, islice, pairwise
+from typing import NamedTuple
 
 import networkx as nx
 import numpy as np
-import topojson as tp
 from shapely import Polygon
-from shapely.geometry import mapping, shape
-from shapely.ops import BaseGeometry, orient, unary_union
-from topojson.utils import serialize_as_geojson
+from shapely.geometry import mapping
+from shapely.geometry.base import BaseGeometry
+from shapely.ops import orient, unary_union
 from tqdm import tqdm
 
 from config import BEST_GEOJSON_QUALITY, GEOJSON_QUALITIES
-from models.osm_country import OSMCountry
 from overpass import query_overpass
+from toposimplify import Topology
 
-_QUERY = 'rel[boundary~"^(administrative|disputed)$"][admin_level=2]["ISO3166-1"][name];out geom qt;'
+
+class OSMCountry(NamedTuple):
+    tags: dict[str, str]
+    geometry: dict[float, BaseGeometry]
+    representative_point: dict
+
+
+_QUERY = (
+    '('
+    'rel[boundary~"^(administrative|disputed)$"][admin_level=2]["ISO3166-1"][name];'
+    'rel(1703814);'  # Palestinian Territories
+    ');'
+    'out geom qt;'
+)
 
 
 def _connect_segments(segments: Sequence[tuple[tuple]]) -> Sequence[Sequence[tuple]]:
@@ -136,11 +149,9 @@ async def get_osm_countries() -> tuple[Sequence[OSMCountry], float]:
     for country in tqdm(countries, desc='Processing geometry'):
         outer_segments = []
         inner_segments = []
-
         for member in country.get('members', []):
             if member['type'] != 'way':
                 continue
-
             if member['role'] == 'outer':
                 outer_segments.append(tuple((g['lon'], g['lat']) for g in member['geometry']))
             elif member['role'] == 'inner':
@@ -149,10 +160,8 @@ async def get_osm_countries() -> tuple[Sequence[OSMCountry], float]:
         try:
             outer_polys = (Polygon(s) for s in _connect_segments(outer_segments))
             inner_polys = (Polygon(s) for s in _connect_segments(inner_segments))
-
             outer_simple = tuple(p for p in outer_polys if p.is_valid)
             inner_simple = tuple(p for p in inner_polys if p.is_valid)
-
             if not outer_simple:
                 raise Exception('No outer polygons')
 
@@ -165,28 +174,21 @@ async def get_osm_countries() -> tuple[Sequence[OSMCountry], float]:
             country_name = country['tags'].get('name', '??')
             raise Exception(f'Error processing {country_name}') from e
 
-    topo = tp.Topology(countries_geoms, prequantize=False)
-    countries_geoms = None  # free memory
-
+    topo = Topology(countries_geoms)  # pyright: ignore[reportArgumentType]
+    del countries_geoms
     for q in tqdm(sorted(GEOJSON_QUALITIES), desc='Simplifying geometry'):
-        topo.toposimplify(q, inplace=True)
-        features = serialize_as_geojson(topo.to_dict())['features']
-        for country_geoms_q, feature in zip(countries_geoms_q, features, strict=True):
-            country_geoms_q[q] = orient(shape(feature['geometry']).buffer(0))  # fix geometry
+        for country_geoms_q, geom in zip(countries_geoms_q, topo.simplify(q), strict=True):
+            country_geoms_q[q] = orient(geom.buffer(0))  # fix geometry
+    del topo
 
-    topo = None  # free memory
-    result = []
-
+    result: list[OSMCountry] = []
     for country, country_geoms_q in zip(countries, countries_geoms_q, strict=True):
-        tags = country['tags']
         point = country_geoms_q[BEST_GEOJSON_QUALITY].representative_point()
-
         result.append(
             OSMCountry(
-                tags=tags,
+                tags=country['tags'],
                 geometry=country_geoms_q,
                 representative_point=mapping(point),
             )
         )
-
     return result, data_timestamp
