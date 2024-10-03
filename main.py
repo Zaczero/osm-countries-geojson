@@ -1,7 +1,7 @@
+import asyncio
 from decimal import Decimal
 
 import msgspec
-import uvloop
 from shapely.geometry import mapping
 from tqdm import tqdm
 
@@ -52,4 +52,4 @@ async def main():
 
 
 if __name__ == '__main__':
-    uvloop.run(main())
+    asyncio.run(main())

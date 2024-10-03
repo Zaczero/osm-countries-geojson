@@ -1,6 +1,6 @@
 let
   # Update with `nixpkgs-update` command
-  pkgs = import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/28b5b8af91ffd2623e995e20aee56510db49001a.tar.gz") { };
+  pkgs = import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/fd698a4ab779fb7fb95425f1b56974ba9c2fa16c.tar.gz") { };
 
   pythonLibs = with pkgs; [
     stdenv.cc.cc.lib
