@@ -53,7 +53,7 @@ async def main():
             'features': features,
         }
 
-        buffer = json.dumps(data, check_circular=False, allow_nan=False)
+        buffer = json.dumps(data, ensure_ascii=False, check_circular=False, allow_nan=False)
         path.write_text(buffer)
 
 
