@@ -1,7 +1,8 @@
 import asyncio
+import gc
+import json
 from decimal import Decimal
 
-import msgspec
 from shapely.geometry import mapping
 from tqdm import tqdm
 
@@ -11,6 +12,11 @@ from osm_countries_gen import get_osm_countries
 
 
 async def main():
+    # reduce gc frequency and freeze uncollected startup gc objects
+    gc.set_threshold(10_000, 10, 10)
+    gc.collect()
+    gc.freeze()
+
     # ensure output directory exists
     GEOJSON_DIR.mkdir(exist_ok=True)
 
@@ -47,8 +53,8 @@ async def main():
             'features': features,
         }
 
-        buffer = msgspec.json.encode(data)
-        path.write_bytes(buffer)
+        buffer = json.dumps(data, check_circular=False, allow_nan=False)
+        path.write_text(buffer)
 
 
 if __name__ == '__main__':
