@@ -1,10 +1,10 @@
 let
   # Update with `nixpkgs-update` command
-  pkgs = import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/a04d33c0c3f1a59a2c1cb0c6e34cd24500e5a1dc.tar.gz") { };
+  pkgs = import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/bf689c40d035239a489de5997a4da5352434632e.tar.gz") { };
 
   pythonLibs = with pkgs; [
-    stdenv.cc.cc.lib
     zlib.out
+    stdenv.cc.cc.lib
   ];
   python' = with pkgs; symlinkJoin {
     name = "python";
@@ -50,7 +50,9 @@ let
   ];
 
   shell' = ''
+    export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
     export PYTHONNOUSERSITE=1
+    export PYTHONPATH=""
     export TZ=UTC
 
     current_python=$(readlink -e .venv/bin/python || echo "")

@@ -4,7 +4,7 @@ import time
 import traceback
 from datetime import timedelta
 
-import httpx
+from httpx import AsyncClient, Timeout
 
 from config import USER_AGENT
 
@@ -34,10 +34,10 @@ def retry_exponential(timeout: timedelta | None, *, start: float = 1):
     return decorator
 
 
-def get_http_client(base_url: str = '') -> httpx.AsyncClient:
-    return httpx.AsyncClient(
+def get_http_client(base_url: str = '') -> AsyncClient:
+    return AsyncClient(
         base_url=base_url,
         headers={'User-Agent': USER_AGENT},
-        timeout=httpx.Timeout(60, connect=15),
+        timeout=Timeout(60, connect=15),
         follow_redirects=True,
     )

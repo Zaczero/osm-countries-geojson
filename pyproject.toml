@@ -1,5 +1,6 @@
 [project]
 dependencies = [
+  "githead>=1.2.0",
   "httpx[brotli,zstd]",
   "networkx",
   "numpy",

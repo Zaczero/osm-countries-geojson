@@ -1,11 +1,14 @@
+import os
 from pathlib import Path
 
+from githead import githead
+
 NAME = 'osm-countries-geojson'
-VERSION = '1.2.0'
+VERSION = 'git#' + githead()[:7]
 WEBSITE = 'https://github.com/Zaczero/osm-countries-geojson'
 USER_AGENT = f'{NAME}/{VERSION} (+{WEBSITE})'
 
-OVERPASS_API_URL = 'https://overpass.monicz.dev/api/interpreter'
+OVERPASS_API_INTERPRETER = os.getenv('OVERPASS_API_INTERPRETER', 'https://overpass-api.de/api/interpreter')
 COUNTRIES_GEOJSON_URL = (
     'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_sovereignty.geojson'
 )
