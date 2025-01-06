@@ -8,6 +8,12 @@ from httpx import AsyncClient, Timeout
 
 from config import USER_AGENT
 
+HTTP = AsyncClient(
+    headers={'User-Agent': USER_AGENT},
+    timeout=Timeout(60, connect=15),
+    follow_redirects=True,
+)
+
 
 def retry_exponential(timeout: timedelta | None, *, start: float = 1):
     timeout_seconds = timeout.total_seconds() if timeout else float('inf')
@@ -32,12 +38,3 @@ def retry_exponential(timeout: timedelta | None, *, start: float = 1):
         return wrapper
 
     return decorator
-
-
-def get_http_client(base_url: str = '') -> AsyncClient:
-    return AsyncClient(
-        base_url=base_url,
-        headers={'User-Agent': USER_AGENT},
-        timeout=Timeout(60, connect=15),
-        follow_redirects=True,
-    )

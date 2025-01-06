@@ -8,14 +8,13 @@ from tqdm import tqdm
 
 from config import BEST_GEOJSON_QUALITY, COUNTRIES_GEOJSON_URL
 from osm_countries_gen import OSMCountry
-from utils import get_http_client, retry_exponential
+from utils import HTTP, retry_exponential
 
 
 @retry_exponential(timedelta(minutes=30))
 async def _get_countries() -> Sequence[dict]:
-    async with get_http_client() as http:
-        r = await http.get(COUNTRIES_GEOJSON_URL)
-        r.raise_for_status()
+    r = await HTTP.get(COUNTRIES_GEOJSON_URL)
+    r.raise_for_status()
     return r.json()['features']
 
 
