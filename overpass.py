@@ -6,11 +6,11 @@ from utils import HTTP, retry_exponential
 
 
 @retry_exponential(timedelta(minutes=30))
-async def query_overpass(query: str, *, timeout: int, must_return: bool = True) -> tuple[Sequence[dict], float]:
+async def query_overpass(query: str, *, http_timeout: int, must_return: bool = True) -> tuple[Sequence[dict], float]:
     join = '' if query.startswith('[') else ';'
-    query = f'[out:json][timeout:{timeout}]{join}{query}'
+    query = f'[out:json][timeout:{http_timeout}]{join}{query}'
 
-    r = await HTTP.post(OVERPASS_API_INTERPRETER, data={'data': query}, timeout=timeout * 2)
+    r = await HTTP.post(OVERPASS_API_INTERPRETER, data={'data': query}, timeout=http_timeout * 2)
     r.raise_for_status()
 
     data = r.json()

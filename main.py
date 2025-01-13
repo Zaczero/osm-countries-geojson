@@ -1,5 +1,4 @@
 import asyncio
-import gc
 import json
 from decimal import Decimal
 
@@ -12,11 +11,6 @@ from osm_countries_gen import get_osm_countries
 
 
 async def main():
-    # reduce gc frequency and freeze uncollected startup gc objects
-    gc.set_threshold(10_000, 10, 10)
-    gc.collect()
-    gc.freeze()
-
     # ensure output directory exists
     GEOJSON_DIR.mkdir(exist_ok=True)
 

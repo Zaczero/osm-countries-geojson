@@ -142,7 +142,7 @@ def _connect_segments(segments: Sequence[tuple[tuple]]) -> Sequence[Sequence[tup
 
 async def get_osm_countries() -> tuple[Sequence[OSMCountry], float]:
     print('Querying Overpass API')
-    countries, data_timestamp = await query_overpass(_QUERY, timeout=300, must_return=True)
+    countries, data_timestamp = await query_overpass(_QUERY, http_timeout=300, must_return=True)
     countries_geoms: list[BaseGeometry] = []
     countries_geoms_q: list[dict[float, BaseGeometry]] = []
 
@@ -158,10 +158,8 @@ async def get_osm_countries() -> tuple[Sequence[OSMCountry], float]:
                 inner_segments.append(tuple((g['lon'], g['lat']) for g in member['geometry']))
 
         try:
-            outer_polys = (Polygon(s) for s in _connect_segments(outer_segments))
-            inner_polys = (Polygon(s) for s in _connect_segments(inner_segments))
-            outer_simple = tuple(p for p in outer_polys if p.is_valid)
-            inner_simple = tuple(p for p in inner_polys if p.is_valid)
+            outer_simple = tuple(p for p in (Polygon(s) for s in _connect_segments(outer_segments)) if p.is_valid)
+            inner_simple = tuple(p for p in (Polygon(s) for s in _connect_segments(inner_segments)) if p.is_valid)
             if not outer_simple:
                 raise Exception('No outer polygons')
 
