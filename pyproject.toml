@@ -1,6 +1,7 @@
 [project]
 dependencies = [
-    "githead>=1.2.0",
+    "githead",
+    "httpx-secure",
     "httpx[brotli,zstd]",
     "networkx",
     "numpy",
@@ -9,7 +10,7 @@ dependencies = [
     "tqdm",
 ]
 name = "osm-countries-geojson"
-requires-python = "~=3.13"
+requires-python = "~=3.13.0"
 version = "0.0.0"
 
 [tool.uv]
@@ -21,13 +22,6 @@ python-preference = "only-system"
 packages = ["."]
 
 [tool.ruff]
-exclude = [
-    ".direnv",
-    ".git",
-    ".ruff_cache",
-    ".venv",
-]
-
 indent-width = 4
 line-length = 120
 target-version = "py313"
@@ -83,6 +77,7 @@ quote-style = "single"
 indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "lf"
+preview = true
 
 [tool.ruff.lint.flake8-builtins]
 builtins-ignorelist = ["id", "open", "type"]

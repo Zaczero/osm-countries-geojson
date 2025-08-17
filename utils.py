@@ -5,13 +5,16 @@ import traceback
 from datetime import timedelta
 
 from httpx import AsyncClient, Timeout
+from httpx_secure import httpx_ssrf_protection
 
 from config import USER_AGENT
 
-HTTP = AsyncClient(
-    headers={'User-Agent': USER_AGENT},
-    timeout=Timeout(60, connect=15),
-    follow_redirects=True,
+HTTP = httpx_ssrf_protection(
+    AsyncClient(
+        headers={'User-Agent': USER_AGENT},
+        timeout=Timeout(60, connect=15),
+        follow_redirects=True,
+    )
 )
 
 
