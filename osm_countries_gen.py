@@ -31,7 +31,7 @@ _QUERY = (
 )
 
 
-def _connect_segments(segments: Sequence[tuple[tuple]]) -> Sequence[Sequence[tuple]]:
+def _connect_segments(segments: Sequence[tuple[tuple]]) -> set[Sequence[tuple]]:
     # count occurrences of each node
     node_count = defaultdict(int)
     for node in chain.from_iterable(segments):
@@ -114,7 +114,8 @@ def _connect_segments(segments: Sequence[tuple[tuple]]) -> Sequence[Sequence[tup
 
         if len(merged_unordered) < 2:
             # this realistically will mean broken data: a single node, a small loop, etc.
-            raise Exception(f'Single-segment cycle ({c!r})')
+            print(f'⚠️ Single-segment cycle: {c!r}')
+            continue
 
         first = merged_unordered[0]
         second = merged_unordered[1]
@@ -137,7 +138,7 @@ def _connect_segments(segments: Sequence[tuple[tuple]]) -> Sequence[Sequence[tup
             if len(merged) >= 4 and merged[1] != merged[-2]:
                 connected.add(connected_normalize(merged))
 
-    return tuple(connected)
+    return connected
 
 
 async def get_osm_countries() -> tuple[Sequence[OSMCountry], float]:
