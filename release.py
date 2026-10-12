@@ -15,6 +15,8 @@ from cloudflare.types.rulesets import RewriteRule
 from cloudflare.types.rulesets.rewrite_rule import ActionParametersURIURIPath
 from cloudflare.types.rulesets.rule_edit_params import RewriteRuleActionParameters
 
+from config import USER_AGENT
+
 
 def activate(cloudflare: Cloudflare, hostname: str, zone: str, release: str, files: Collection[str]) -> set[str]:
     ruleset = cloudflare.rulesets.phases.get('http_request_transform', zone_id=zone)
@@ -74,7 +76,8 @@ def verify_public_index(hostname: str, expected_hash: str) -> None:
     )
     deadline = time.monotonic() + 180
     while True:
-        with urllib.request.urlopen(f'https://{hostname}/', context=context, timeout=30) as response:
+        request = urllib.request.Request(f'https://{hostname}/', headers={'User-Agent': USER_AGENT})
+        with urllib.request.urlopen(request, context=context, timeout=30) as response:  # noqa: S310 -- The request URL is always HTTPS.
             actual = hashlib.file_digest(response, 'sha256').hexdigest()
         if actual == expected_hash:
             return
