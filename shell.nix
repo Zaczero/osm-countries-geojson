@@ -27,22 +27,36 @@ let
     curl
     jq
 
-    findutils
+    diffutils
+    gzip
     zopfli
     brotli
     zstd
 
     (writeShellScriptBin "compress-geojson" ''
-      set -e
+      set -euo pipefail
       echo "Compressing GeoJSON files..."
       rm -f geojson/*.geojson.{gz,br,zst}
-      files=$(find geojson -type f -name '*.geojson')
-      for file in $files; do
+      pids=()
+      for file in geojson/*.geojson; do
+        test -f "$file"
         zopfli "$file" &
+        pids+=("$!")
         brotli --best "$file" &
+        pids+=("$!")
         zstd --no-progress --ultra -22 --single-thread "$file" &
+        pids+=("$!")
       done
-      wait
+      result=0
+      for pid in "''${pids[@]}"; do
+        wait "$pid" || result=1
+      done
+      [ "$result" -eq 0 ] || exit "$result"
+      for file in geojson/*.geojson; do
+        gzip --decompress --stdout "$file.gz" | cmp - "$file"
+        brotli --decompress --stdout "$file.br" | cmp - "$file"
+        zstd --decompress --stdout "$file.zst" | cmp - "$file"
+      done
     '')
     (writeShellScriptBin "nixpkgs-update" ''
       set -e
