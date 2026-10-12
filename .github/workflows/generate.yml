@@ -35,12 +35,18 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        # Publish before release tracking so metadata failures cannot block data updates.
         run: >-
           nix-shell --pure --arg ci true
           --keep AWS_ACCESS_KEY_ID --keep AWS_SECRET_ACCESS_KEY
           --keep CLOUDFLARE_API_TOKEN
-          --keep SENTRY_DSN --keep GITHUB_RUN_ID
+          --keep SENTRY_DSN --keep SENTRY_AUTH_TOKEN --keep GITHUB_RUN_ID
           --keep GITHUB_RUN_ATTEMPT --keep GITHUB_SHA
           --run "sentry-cli monitors run osm-countries-geojson
           --schedule '$SENTRY_MONITOR_SCHEDULE' --
-          bash -euc 'generate-geojson; publish-geojson'"
+          bash -euc 'generate-geojson; publish-geojson;
+          sentry-cli releases new \"$GITHUB_SHA\";
+          sentry-cli releases set-commits \"$GITHUB_SHA\" --auto;
+          sentry-cli releases finalize \"$GITHUB_SHA\";
+          sentry-cli deploys new --release \"$GITHUB_SHA\" --env production'"

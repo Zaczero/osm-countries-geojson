@@ -1,0 +1,4 @@
+[defaults]
+url = https://sentry.monicz.dev
+org = sentry
+project = osm-countries-geojson
