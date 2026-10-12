@@ -6,7 +6,6 @@ import ssl
 import time
 import urllib.request
 from collections.abc import Collection
-from datetime import UTC, datetime, timedelta
 from itertools import batched
 from typing import cast
 
@@ -18,7 +17,7 @@ from cloudflare.types.rulesets.rule_edit_params import RewriteRuleActionParamete
 from config import USER_AGENT
 
 
-def activate(cloudflare: Cloudflare, hostname: str, zone: str, release: str, files: Collection[str]) -> set[str]:
+def activate(cloudflare: Cloudflare, hostname: str, zone: str, release: str, files: Collection[str]) -> None:
     ruleset = cloudflare.rulesets.phases.get('http_request_transform', zone_id=zone)
     reference = 'fleet_r2_' + re.sub('[^a-z0-9]', '_', hostname) + '_release'
     rule = next(item for item in ruleset.rules if item.ref == reference)
@@ -33,20 +32,13 @@ def activate(cloudflare: Cloudflare, hostname: str, zone: str, release: str, fil
     current = re.search(r'/releases/([0-9a-f]{64})', uri.path.expression)
     if current is None:
         raise RuntimeError('Download rule does not identify a release')
-    if current[1] == release:
-        previous = re.fullmatch(r'Previous release: ([0-9a-f]{64})', rule.description or '')
-        if previous is None:
-            raise RuntimeError('Download rule has no previous-release marker')
-        previous_release = previous[1]
-    else:
-        previous_release = current[1]
-        # Routing and rollback retention change in the same atomic rule update.
+    if current[1] != release:
         cloudflare.rulesets.rules.edit(
             rule.id,
             ruleset_id=ruleset.id,
             zone_id=zone,
             ref=reference,
-            description=f'Previous release: {previous_release}',
+            description=f'Current release: {release}',
             expression=f'http.host eq {json.dumps(hostname)}',
             action='rewrite',
             # The SDK's URI union omits the API's combined path and query rewrite.
@@ -67,7 +59,6 @@ def activate(cloudflare: Cloudflare, hostname: str, zone: str, release: str, fil
     urls = [f'https://{hostname}{prefix}/{name}' for name in files for prefix in ('', f'/releases/{release}')]
     for batch in batched(urls, 30):  # noqa: B911 -- The final API batch may be partial.
         cloudflare.cache.purge(zone_id=zone, files=list(batch))
-    return {release, previous_release}
 
 
 def verify_public_index(hostname: str, expected_hash: str) -> None:
@@ -86,20 +77,13 @@ def verify_public_index(hostname: str, expected_hash: str) -> None:
         time.sleep(3)
 
 
-def collect(client, bucket: str, retained: set[str]) -> None:
-    cutoff = datetime.now(UTC) - timedelta(days=7)
+def collect(client, bucket: str, release: str) -> None:
     for page in client.get_paginator('list_objects_v2').paginate(Bucket=bucket, Prefix='releases/'):
-        keys = [
-            {'Key': item['Key']}
-            for item in page.get('Contents', [])
-            if item['Key'].split('/')[1] not in retained and item['LastModified'] < cutoff
-        ]
+        keys = [{'Key': item['Key']} for item in page.get('Contents', []) if item['Key'].split('/')[1] != release]
         if keys:
             result = client.delete_objects(Bucket=bucket, Delete={'Objects': keys, 'Quiet': True})
             if result.get('Errors'):
                 raise RuntimeError(f'Release cleanup failed: {result["Errors"]}')
-    cutoff = datetime.now(UTC) - timedelta(days=1)
     for page in client.get_paginator('list_multipart_uploads').paginate(Bucket=bucket, Prefix='releases/'):
         for upload in page.get('Uploads', []):
-            if upload['Initiated'] < cutoff:
-                client.abort_multipart_upload(Bucket=bucket, Key=upload['Key'], UploadId=upload['UploadId'])
+            client.abort_multipart_upload(Bucket=bucket, Key=upload['Key'], UploadId=upload['UploadId'])

@@ -1,15 +1,16 @@
 # ruff: noqa: S106 -- Synthetic credentials are sent only through the mock transport.
 import json
+from types import SimpleNamespace
 
 import httpx
 import pytest
 from cloudflare import APIError, Cloudflare
 
-from release import activate
+from release import activate, collect
 
 
 class RulesEndpoint:
-    def __init__(self, release, previous, fail=None):
+    def __init__(self, release, fail=None):
         self.fail = fail
         self.rule = {
             'id': 'rule',
@@ -19,7 +20,7 @@ class RulesEndpoint:
             'enabled': True,
             'expression': 'http.host eq "example.invalid"',
             'ref': 'fleet_r2_example_invalid_release',
-            'description': f'Previous release: {previous}',
+            'description': 'GeoJSON downloads',
             'action_parameters': {
                 'uri': {
                     'path': {
@@ -51,17 +52,18 @@ class RulesEndpoint:
         return httpx.Response(200, json={'success': True, 'errors': [], 'messages': [], 'result': result})
 
 
-def test_completed_admission_retains_both_accepted_generations():
-    endpoint = RulesEndpoint('a' * 64, 'c' * 64)
+def test_completed_admission_routes_to_the_new_release():
+    endpoint = RulesEndpoint('a' * 64)
     with Cloudflare(api_token='fixture', http_client=httpx.Client(transport=httpx.MockTransport(endpoint))) as client:
-        retained = activate(client, 'example.invalid', 'zone', 'b' * 64, [''])
-    assert retained == {'b' * 64, 'a' * 64}
-    assert endpoint.rule['description'] == f'Previous release: {"a" * 64}'
+        activate(client, 'example.invalid', 'zone', 'b' * 64, [''])
+    assert endpoint.rule['action_parameters']['uri']['path']['expression'] == (
+        f'concat("/releases/{"b" * 64}", http.request.uri.path)'
+    )
 
 
 @pytest.mark.parametrize('failure', ['before', 'after'])
-def test_interrupted_admission_preserves_previous_release_on_retry(failure):
-    endpoint = RulesEndpoint('a' * 64, 'c' * 64, fail=failure)
+def test_interrupted_admission_can_be_retried(failure):
+    endpoint = RulesEndpoint('a' * 64, fail=failure)
     with Cloudflare(
         api_token='fixture',
         max_retries=0,
@@ -70,21 +72,43 @@ def test_interrupted_admission_preserves_previous_release_on_retry(failure):
         with pytest.raises(APIError):
             activate(client, 'example.invalid', 'zone', 'b' * 64, [''])
         endpoint.fail = None
-        actual = 'a' * 64 if failure == 'before' else 'b' * 64
-        retained = activate(client, 'example.invalid', 'zone', actual, [''])
-    assert retained == ({'a' * 64, 'c' * 64} if failure == 'before' else {'b' * 64, 'a' * 64})
+        activate(client, 'example.invalid', 'zone', 'b' * 64, [''])
+    assert endpoint.rule['action_parameters']['uri']['path']['expression'] == (
+        f'concat("/releases/{"b" * 64}", http.request.uri.path)'
+    )
 
 
-def test_unchanged_admission_keeps_the_previous_generation():
-    endpoint = RulesEndpoint('a' * 64, 'c' * 64)
+def test_unchanged_admission_needs_no_previous_release_marker():
+    endpoint = RulesEndpoint('a' * 64)
     with Cloudflare(api_token='fixture', http_client=httpx.Client(transport=httpx.MockTransport(endpoint))) as client:
-        retained = activate(client, 'example.invalid', 'zone', 'a' * 64, [''])
-    assert retained == {'a' * 64, 'c' * 64}
+        activate(client, 'example.invalid', 'zone', 'a' * 64, [''])
+    assert endpoint.rule['action_parameters']['uri']['path']['expression'] == (
+        f'concat("/releases/{"a" * 64}", http.request.uri.path)'
+    )
 
 
-def test_first_ci_admission_retains_the_existing_fleet_release():
-    endpoint = RulesEndpoint('a' * 64, None)
-    endpoint.rule['description'] = 'Accepted R2 release for example.invalid'
-    with Cloudflare(api_token='fixture', http_client=httpx.Client(transport=httpx.MockTransport(endpoint))) as client:
-        retained = activate(client, 'example.invalid', 'zone', 'b' * 64, [''])
-    assert retained == {'b' * 64, 'a' * 64}
+class ReleaseBucket:
+    def __init__(self):
+        self.keys = {'releases/current/data', 'releases/current/manifest.json', 'releases/old/data'}
+        self.uploads = {'unfinished'}
+
+    def get_paginator(self, operation):
+        if operation == 'list_objects_v2':
+            pages = [{'Contents': [{'Key': key} for key in self.keys]}]
+        else:
+            pages = [{'Uploads': [{'Key': 'releases/abandoned/data', 'UploadId': 'unfinished'}]}]
+        return SimpleNamespace(paginate=lambda **_: pages)
+
+    def delete_objects(self, **request):
+        self.keys.difference_update(item['Key'] for item in request['Delete']['Objects'])
+        return {}
+
+    def abort_multipart_upload(self, **request):
+        self.uploads.remove(request['UploadId'])
+
+
+def test_collection_keeps_only_the_current_release():
+    bucket = ReleaseBucket()
+    collect(bucket, 'fixture', 'current')
+    assert bucket.keys == {'releases/current/data', 'releases/current/manifest.json'}
+    assert not bucket.uploads

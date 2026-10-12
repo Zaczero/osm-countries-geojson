@@ -120,10 +120,10 @@ def main():
     release, files = publish(client, bucket, GEOJSON_DIR, REVISION)
     with sentry_sdk.start_span(op='r2.activate', name='Activate verified release'):
         with Cloudflare() as cloudflare:
-            retained = activate(cloudflare, PUBLICATION['hostname'], PUBLICATION['zone'], release, files)
+            activate(cloudflare, PUBLICATION['hostname'], PUBLICATION['zone'], release, files)
         verify_public_index(PUBLICATION['hostname'], files['']['sha256'])
-    with sentry_sdk.start_span(op='r2.collect', name='Collect expired releases'):
-        collect(client, bucket, retained)
+    with sentry_sdk.start_span(op='r2.collect', name='Remove superseded releases'):
+        collect(client, bucket, release)
     print(f'Published release {release}', file=sys.stderr, flush=True)
 
 
