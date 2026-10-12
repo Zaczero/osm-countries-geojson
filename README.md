@@ -1,34 +1,30 @@
-# 🗺️ OSM Countries GeoJSON
+# OSM Countries GeoJSON
 
-![Python version](https://shields.monicz.dev/badge/python-v3.13-blue)
-[![Liberapay Patrons](https://shields.monicz.dev/liberapay/patrons/Zaczero?logo=liberapay&label=Patrons)](https://liberapay.com/Zaczero/)
-[![GitHub Sponsors](https://shields.monicz.dev/github/sponsors/Zaczero?logo=github&label=Sponsors&color=%23db61a2)](https://github.com/sponsors/Zaczero)
-[![GitHub Stars](https://shields.monicz.dev/github/stars/Zaczero/osm-countries-geojson?style=social)](https://github.com/Zaczero/osm-countries-geojson)
+Country boundaries from OpenStreetMap, simplified and exported as GeoJSON.
 
-» [Browse latest GeoJSON files](https://osm-countries-geojson.monicz.dev)
+**[Browse and download the files](https://osm-countries-geojson.monicz.dev/)**
 
-_↑ The number at the end indicates simplification; a smaller number means better quality._
+Choose a simplification tolerance to suit your map: smaller numbers preserve more
+detail. Downloads are available in Zstandard, Brotli and gzip formats.
+Original OpenStreetMap tags are retained in each feature's `properties.tags`.
 
-The GeoJSON files are updated daily, fetching the latest country information from OpenStreetMap.
-Additional validation is in place, which aborts GeoJSON updates if vandalism is detected.
-While this project is licensed under AGPL-3.0, the GeoJSON data remains under the ODbL license.
+```sh
+curl --fail --location --output countries.geojson.zst \
+  https://osm-countries-geojson.monicz.dev/osm-countries-0-001.geojson.zst
+zstd --decompress countries.geojson.zst
+```
 
-See the data in action on <https://openaedmap.org>.
+Generation is scheduled twice daily. The download index shows the source timestamp
+of the published data; failed updates leave the last complete release available.
 
-## Footer
+Used by [OpenAEDMap](https://openaedmap.org).
 
-### Contact me
+## License and support
 
-<https://monicz.dev/#get-in-touch>
+The generator is licensed under [AGPL-3.0](LICENSE). The data is licensed under
+[ODbL 1.0](https://opendatacommons.org/licenses/odbl/), with attribution to
+[OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
 
-### License
-
-#### Processing Script
-
-This project is licensed under the GNU Affero General Public License v3.0.
-
-The complete license text can be accessed in the repository at [LICENSE](https://github.com/Zaczero/osm-countries-geojson/blob/main/LICENSE).
-
-#### Produced GeoJSON Files
-
-The produced GeoJSON files are licensed under the [Open Data Commons Open Database License](https://opendatacommons.org/licenses/odbl/). It is the same license as the OpenStreetMap data.
+[GitHub Sponsors](https://github.com/sponsors/Zaczero) ·
+[Liberapay](https://liberapay.com/Zaczero/) ·
+[Contact](https://monicz.dev/#get-in-touch)
