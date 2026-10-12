@@ -1,0 +1,46 @@
+name: Generate GeoJSON
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: &schedule "34 7,19 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geojson-generation
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    environment: publication
+    env:
+      SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+      SENTRY_MONITOR_SCHEDULE: *schedule
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
+        with:
+          primary-key: geojson-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('shell.nix', 'uv.lock') }}
+          paths: |
+            ~/.cache/nix
+            ~/.cache/uv
+      - name: Generate and publish
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: >-
+          nix-shell --pure --arg ci true
+          --keep AWS_ACCESS_KEY_ID --keep AWS_SECRET_ACCESS_KEY
+          --keep CLOUDFLARE_API_TOKEN
+          --keep SENTRY_DSN --keep GITHUB_RUN_ID
+          --keep GITHUB_RUN_ATTEMPT --keep GITHUB_SHA
+          --run "sentry-cli monitors run osm-countries-geojson
+          --schedule '$SENTRY_MONITOR_SCHEDULE' --
+          bash -euc 'generate-geojson; publish-geojson'"

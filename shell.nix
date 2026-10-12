@@ -1,3 +1,7 @@
+{
+  ci ? false,
+}:
+
 let
   publication = builtins.fromJSON (builtins.readFile ./publication.json);
   # Update with `nixpkgs-update` command
@@ -26,6 +30,7 @@ let
 
     git
     minify
+    sentry-cli
     uv
 
     (writeShellScriptBin "generate-geojson" ''
@@ -58,7 +63,7 @@ let
 
     echo "Installing Python dependencies"
     export UV_PYTHON="${python'}/bin/python"
-    uv sync --frozen || exit
+    uv sync --frozen ${lib.optionalString ci "--no-dev"} || exit
 
     echo "Activating Python virtual environment"
     source .venv/bin/activate
