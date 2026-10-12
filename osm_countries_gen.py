@@ -154,6 +154,7 @@ async def get_osm_countries() -> tuple[Sequence[OSMCountry], float]:
     print('Querying Overpass API')
     with sentry_sdk.start_span(op='http.client', name='Fetch OSM country boundaries'):
         countries, data_timestamp = await query_overpass(_QUERY, http_timeout=300, must_return=True)
+    print(f'OSM data as of {datetime.fromtimestamp(data_timestamp, UTC).isoformat()}')
     countries_geoms: list[BaseGeometry] = []
     countries_geoms_q: list[dict[float, BaseGeometry]] = []
 

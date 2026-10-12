@@ -83,7 +83,6 @@ pkgs.mkShellNoCC {
   NIX_PATH = "nixpkgs=${pkgs.path}";
   AWS_DEFAULT_REGION = "auto";
   AWS_ENDPOINT_URL_S3 = "https://${publication.account}.r2.cloudflarestorage.com";
-  OVERPASS_API_INTERPRETER = "https://overpass.private.coffee/api/interpreter";
   PYTHONUNBUFFERED = "1";
   shellHook = shell';
 }
