@@ -1,17 +1,27 @@
 [project]
 dependencies = [
-    "githead",
+    "brotli",
     "httpx-secure",
-    "httpx[brotli,zstd]",
+    "httpx",
     "networkx",
     "numpy",
-    "scikit-learn",
+    "sentry-sdk",
     "shapely",
-    "tqdm",
+    "zopfli",
 ]
 name = "osm-countries-geojson"
-requires-python = "~=3.13.0"
+requires-python = "~=3.14.0"
 version = "0.0.0"
+
+[dependency-groups]
+dev = ["brotli-stubs", "pytest", "types-networkx", "types-shapely"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
 
 [tool.uv]
 package = false
@@ -24,7 +34,7 @@ packages = ["."]
 [tool.ruff]
 indent-width = 4
 line-length = 120
-target-version = "py313"
+target-version = "py314"
 
 [tool.ruff.lint]
 ignore = []

@@ -2,7 +2,7 @@ let
   # Update with `nixpkgs-update` command
   pkgs =
     import
-      (fetchTarball "https://github.com/NixOS/nixpkgs/archive/32f313e49e42f715491e1ea7b306a87c16fe0388.tar.gz")
+      (fetchTarball "https://github.com/NixOS/nixpkgs/archive/8edc0c72e3a38faf5434e40d1f19431125fe4b30.tar.gz")
       { };
 
   pythonLibs = with pkgs; [
@@ -13,58 +13,27 @@ let
     with pkgs;
     symlinkJoin {
       name = "python";
-      paths = [ python313 ];
+      paths = [ python314 ];
       buildInputs = [ makeWrapper ];
       postBuild = ''
-        wrapProgram "$out/bin/python3.13" --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath pythonLibs}"
+        wrapProgram "$out/bin/python3.14" --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath pythonLibs}"
       '';
     };
 
   packages' = with pkgs; [
     python'
+
+    git
     uv
-    ruff
-    curl
-    jq
 
-    diffutils
-    gzip
-    zopfli
-    brotli
-    zstd
-
-    (writeShellScriptBin "compress-geojson" ''
-      set -euo pipefail
-      echo "Compressing GeoJSON files..."
-      rm -f geojson/*.geojson.{gz,br,zst}
-      pids=()
-      for file in geojson/*.geojson; do
-        test -f "$file"
-        zopfli "$file" &
-        pids+=("$!")
-        brotli --best "$file" &
-        pids+=("$!")
-        zstd --no-progress --ultra -22 --single-thread "$file" &
-        pids+=("$!")
-      done
-      result=0
-      for pid in "''${pids[@]}"; do
-        wait "$pid" || result=1
-      done
-      [ "$result" -eq 0 ] || exit "$result"
-      for file in geojson/*.geojson; do
-        gzip --decompress --stdout "$file.gz" | cmp - "$file"
-        brotli --decompress --stdout "$file.br" | cmp - "$file"
-        zstd --decompress --stdout "$file.zst" | cmp - "$file"
-      done
+    (writeShellScriptBin "generate-geojson" ''
+      exec python generate.py
     '')
     (writeShellScriptBin "nixpkgs-update" ''
       set -e
       hash=$(
-        curl -sSL \
-          https://prometheus.nixos.org/api/v1/query \
-          -d 'query=channel_revision{channel="nixpkgs-unstable"}' \
-        | jq -r ".data.result[0].metric.revision")
+        git ls-remote --exit-code https://github.com/NixOS/nixpkgs.git \
+          refs/heads/nixpkgs-unstable | cut -f1)
       sed -i "s|nixpkgs/archive/[0-9a-f]\\{40\\}|nixpkgs/archive/$hash|" shell.nix
       echo "Nixpkgs updated to $hash"
     '')
@@ -83,7 +52,7 @@ let
 
     echo "Installing Python dependencies"
     export UV_PYTHON="${python'}/bin/python"
-    uv sync --frozen
+    uv sync --frozen || exit
 
     echo "Activating Python virtual environment"
     source .venv/bin/activate
@@ -100,5 +69,8 @@ let
 in
 pkgs.mkShellNoCC {
   buildInputs = packages';
+  NIX_PATH = "nixpkgs=${pkgs.path}";
+  OVERPASS_API_INTERPRETER = "https://overpass.private.coffee/api/interpreter";
+  PYTHONUNBUFFERED = "1";
   shellHook = shell';
 }

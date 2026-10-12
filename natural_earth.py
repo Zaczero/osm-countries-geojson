@@ -1,18 +1,18 @@
 from collections.abc import Sequence
 from datetime import timedelta
+from typing import Any
 
 from shapely import unary_union
 from shapely.geometry import shape
 from shapely.geometry.base import BaseGeometry
-from tqdm import tqdm
 
 from config import BEST_GEOJSON_QUALITY, COUNTRIES_GEOJSON_URL
 from osm_countries_gen import OSMCountry
-from utils import HTTP, retry_exponential
+from utils import HTTP, progress, retry_exponential
 
 
 @retry_exponential(timedelta(minutes=30))
-async def _get_countries() -> Sequence[dict]:
+async def _get_countries() -> Sequence[dict[str, Any]]:
     r = await HTTP.get(COUNTRIES_GEOJSON_URL)
     r.raise_for_status()
     return r.json()['features']
@@ -36,7 +36,7 @@ async def validate_countries(countries: Sequence[OSMCountry]) -> None:
     geometry_union: BaseGeometry = unary_union([c.geometry[BEST_GEOJSON_QUALITY] for c in countries])
 
     # validate country geometries by checking if the representative point is inside the geometry
-    for ne_country in tqdm(ne_countries, desc='Validating'):
+    for ne_country in progress(ne_countries, desc='Validating'):
         ne_geom = shape(ne_country['geometry'])
         ne_point = ne_geom.representative_point()
 

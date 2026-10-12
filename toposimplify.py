@@ -1,4 +1,5 @@
 from collections.abc import Collection, Iterable, Sequence
+from itertools import accumulate, pairwise
 from typing import NamedTuple
 
 import numpy as np
@@ -45,7 +46,7 @@ def _get_rings_data(geoms: Iterable[Polygon | MultiPolygon]) -> list[_RingData]:
     return rings_data
 
 
-def _find_endpoints(rings_data: Iterable[_RingData]) -> NDArray[np.complexfloating]:
+def _find_endpoints(rings_data: Sequence[_RingData]) -> NDArray[np.complexfloating]:
     all_coords = np.hstack(tuple(c.coords for c in rings_data))
     unique_coords, counts = np.unique(all_coords, return_counts=True)  # unique_coords are sorted
     del all_coords
@@ -182,14 +183,10 @@ def _reconstruct_polys(rings_data: Iterable[_SplitRingData]) -> tuple[Sequence[P
 
 
 def _reconstruct_geoms(polys: Sequence[Polygon], geoms_sizes: Sequence[int]) -> list[Polygon | MultiPolygon]:
-    geoms_len = len(geoms_sizes)
-    geoms_end_indices = np.cumsum(geoms_sizes)
-    geoms_start_indices = np.roll(geoms_end_indices, 1)
-    geoms_start_indices[0] = 0
-    result: list[Polygon | MultiPolygon] = [None] * geoms_len  # pyright: ignore[reportAssignmentType]
-    for i, start_idx, end_idx in zip(range(geoms_len), geoms_start_indices, geoms_end_indices, strict=True):
+    result: list[Polygon | MultiPolygon] = []
+    for start_idx, end_idx in pairwise(accumulate(geoms_sizes, initial=0)):
         if end_idx - start_idx == 1:  # case: Polygon
-            result[i] = polys[start_idx]
+            result.append(polys[start_idx])
         else:  # case: MultiPolygon
-            result[i] = multipolygons(polys[start_idx:end_idx])
+            result.append(multipolygons(polys[start_idx:end_idx]))
     return result

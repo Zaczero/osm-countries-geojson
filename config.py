@@ -1,10 +1,11 @@
 import os
+import subprocess
+from decimal import Decimal
 from pathlib import Path
 
-from githead import githead
-
 NAME = 'osm-countries-geojson'
-VERSION = 'git#' + githead()[:7]
+REVISION = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()  # noqa: S607 -- Git is provided by the environment.
+VERSION = 'git#' + REVISION[:7]
 WEBSITE = 'https://github.com/Zaczero/osm-countries-geojson'
 USER_AGENT = f'{NAME}/{VERSION} (+{WEBSITE})'
 
@@ -24,3 +25,13 @@ GEOJSON_QUALITIES = (
 )
 
 BEST_GEOJSON_QUALITY = min(GEOJSON_QUALITIES)
+
+
+def geojson_name(quality: float) -> str:
+    value = format(Decimal(str(quality)), 'f').replace('.', '-')
+    return f'osm-countries-{value}.geojson'
+
+
+DOWNLOAD_NAMES = tuple(
+    geojson_name(quality) + suffix for quality in GEOJSON_QUALITIES for suffix in ('', '.br', '.gz', '.zst')
+)

@@ -1,25 +1,33 @@
+import gzip
+import json
 from collections import defaultdict
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from itertools import chain, cycle, islice, pairwise
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import networkx as nx
 import numpy as np
+import sentry_sdk
 from shapely import Polygon
 from shapely.geometry import mapping
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import orient, unary_union
-from tqdm import tqdm
 
 from config import BEST_GEOJSON_QUALITY, GEOJSON_QUALITIES
+from errors import OSMDataError
 from overpass import query_overpass
 from toposimplify import Topology
+from utils import progress
 
 
 class OSMCountry(NamedTuple):
     tags: dict[str, str]
     geometry: dict[float, BaseGeometry]
-    representative_point: dict
+    representative_point: dict[str, Any]
+
+
+type Coordinate = tuple[float, float]
 
 
 _QUERY = (
@@ -31,7 +39,7 @@ _QUERY = (
 )
 
 
-def _connect_segments(segments: Sequence[tuple[tuple]]) -> set[Sequence[tuple]]:
+def _connect_segments(segments: Sequence[tuple[Coordinate, ...]]) -> set[tuple[Coordinate, ...]]:
     # count occurrences of each node
     node_count = defaultdict(int)
     for node in chain.from_iterable(segments):
@@ -39,10 +47,12 @@ def _connect_segments(segments: Sequence[tuple[tuple]]) -> set[Sequence[tuple]]:
 
     # validate that all segments are closed (i.e., start and end at intersections)
     for s in segments:
+        if len(s) < 2:
+            raise OSMDataError('Boundary way has fewer than two coordinates')
         node_id_start = s[0]
         node_id_end = s[-1]
         if node_count[node_id_start] < 2 or node_count[node_id_end] < 2:
-            raise ValueError(f'Segments must be closed (node/{node_id_start}, node/{node_id_end})')
+            raise OSMDataError(f'Segments must be closed ({node_id_start}, {node_id_end})')
 
     # node = intersection, node_count > 1
     # edge = segment between intersections
@@ -84,7 +94,7 @@ def _connect_segments(segments: Sequence[tuple[tuple]]) -> set[Sequence[tuple]]:
     connected = set()
 
     # function to normalize a closed loop
-    def connected_normalize(segment: list) -> tuple:
+    def connected_normalize(segment: list[Coordinate]) -> tuple[Coordinate, ...]:
         min_idx = np.argmin(segment, axis=0)[0]
 
         # normalize starting point
@@ -104,7 +114,7 @@ def _connect_segments(segments: Sequence[tuple[tuple]]) -> set[Sequence[tuple]]:
     for c in nx.simple_cycles(graph):
         c = tuple(islice(cycle(c), len(c) + 1))  # close the cycle
 
-        merged_unordered: list[list] = []
+        merged_unordered: list[list[Coordinate]] = []
 
         for u, v in pairwise(c):
             if subsegment := graph[u][v].get('subsegment'):
@@ -132,8 +142,7 @@ def _connect_segments(segments: Sequence[tuple[tuple]]) -> set[Sequence[tuple]]:
             elif merged[-1] == segment[-1]:
                 merged.extend(islice(reversed(segment), 1, None))
             else:
-                print('⚠️ Invalid cycle')
-                break
+                raise RuntimeError('Graph cycle contains disconnected segments')
         else:
             if len(merged) >= 4 and merged[1] != merged[-2]:
                 connected.add(connected_normalize(merged))
@@ -143,41 +152,61 @@ def _connect_segments(segments: Sequence[tuple[tuple]]) -> set[Sequence[tuple]]:
 
 async def get_osm_countries() -> tuple[Sequence[OSMCountry], float]:
     print('Querying Overpass API')
-    countries, data_timestamp = await query_overpass(_QUERY, http_timeout=300, must_return=True)
+    with sentry_sdk.start_span(op='http.client', name='Fetch OSM country boundaries'):
+        countries, data_timestamp = await query_overpass(_QUERY, http_timeout=300, must_return=True)
     countries_geoms: list[BaseGeometry] = []
     countries_geoms_q: list[dict[float, BaseGeometry]] = []
 
-    for country in tqdm(countries, desc='Processing geometry'):
+    for country in progress(countries, desc='Processing geometry'):
         outer_segments = []
         inner_segments = []
-        for member in country.get('members', []):
-            if member['type'] != 'way':
-                continue
-            if member['role'] == 'outer':
-                outer_segments.append(tuple((g['lon'], g['lat']) for g in member['geometry']))
-            elif member['role'] == 'inner':
-                inner_segments.append(tuple((g['lon'], g['lat']) for g in member['geometry']))
-
         try:
+            for member in country.get('members', []):
+                if member['type'] != 'way':
+                    continue
+                if member['role'] == 'outer':
+                    outer_segments.append(tuple((g['lon'], g['lat']) for g in member['geometry']))
+                elif member['role'] == 'inner':
+                    inner_segments.append(tuple((g['lon'], g['lat']) for g in member['geometry']))
+
+            if not outer_segments:
+                raise OSMDataError('No outer boundary ways')
             outer_simple = tuple(p for p in (Polygon(s) for s in _connect_segments(outer_segments)) if p.is_valid)
             inner_simple = tuple(p for p in (Polygon(s) for s in _connect_segments(inner_segments)) if p.is_valid)
             if not outer_simple:
-                raise Exception('No outer polygons')
+                raise RuntimeError('Could not reconstruct any valid outer polygons')
 
             outer_union: BaseGeometry = unary_union(outer_simple)
             inner_union: BaseGeometry = unary_union(inner_simple)
             countries_geoms.append(outer_union.difference(inner_union))
             countries_geoms_q.append({})
+            del country['members']
 
         except Exception as e:
             country_name = country['tags'].get('name', '??')
-            raise Exception(f'Error processing {country_name}') from e
+            e.add_note(f'Processing relation/{country["id"]}: {country_name}')
+            if not isinstance(e, OSMDataError):
+                # The unhandled-exception hook runs outside asyncio's context.
+                scope = sentry_sdk.get_global_scope()
+                scope.set_context('osm', {'relation_id': country['id'], 'source_timestamp': data_timestamp})
+                scope.add_attachment(
+                    bytes=lambda country=country: gzip.compress(
+                        json.dumps({
+                            'osm3s': {'timestamp_osm_base': datetime.fromtimestamp(data_timestamp, UTC).isoformat()},
+                            'elements': [country],
+                        }).encode()
+                    ),
+                    filename=f'relation-{country["id"]}.json.gz',
+                    content_type='application/gzip',
+                )
+            raise
 
     topo = Topology(countries_geoms)  # pyright: ignore[reportArgumentType]
     del countries_geoms
-    for q in tqdm(sorted(GEOJSON_QUALITIES), desc='Simplifying geometry'):
-        for country_geoms_q, geom in zip(countries_geoms_q, topo.simplify(q), strict=True):
-            country_geoms_q[q] = orient(geom.buffer(0))  # fix geometry
+    for q in progress(sorted(GEOJSON_QUALITIES), desc='Simplifying geometry'):
+        with sentry_sdk.start_span(op='geo.simplify', name=f'Simplify tolerance {q}'):
+            for country_geoms_q, geom in zip(countries_geoms_q, topo.simplify(q), strict=True):
+                country_geoms_q[q] = orient(geom.buffer(0))  # fix geometry
     del topo
 
     result: list[OSMCountry] = []
