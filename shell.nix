@@ -1,4 +1,5 @@
 let
+  publication = builtins.fromJSON (builtins.readFile ./publication.json);
   # Update with `nixpkgs-update` command
   pkgs =
     import
@@ -24,10 +25,14 @@ let
     python'
 
     git
+    minify
     uv
 
     (writeShellScriptBin "generate-geojson" ''
       exec python generate.py
+    '')
+    (writeShellScriptBin "publish-geojson" ''
+      exec python publish.py
     '')
     (writeShellScriptBin "nixpkgs-update" ''
       set -e
@@ -43,6 +48,7 @@ let
     export TZ=UTC
     export NIX_SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt
     export SSL_CERT_FILE=$NIX_SSL_CERT_FILE
+    export AWS_CA_BUNDLE=$NIX_SSL_CERT_FILE
     export PYTHONNOUSERSITE=1
     export PYTHONPATH=""
 
@@ -70,6 +76,8 @@ in
 pkgs.mkShellNoCC {
   buildInputs = packages';
   NIX_PATH = "nixpkgs=${pkgs.path}";
+  AWS_DEFAULT_REGION = "auto";
+  AWS_ENDPOINT_URL_S3 = "https://${publication.account}.r2.cloudflarestorage.com";
   OVERPASS_API_INTERPRETER = "https://overpass.private.coffee/api/interpreter";
   PYTHONUNBUFFERED = "1";
   shellHook = shell';

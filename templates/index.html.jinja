@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OSM Countries GeoJSON — country boundary downloads</title>
+  <meta name="description" content="Country boundaries from OpenStreetMap in GeoJSON.">
+  <link rel="canonical" href="{{ canonical }}">
+  <script async src="https://www.googletagmanager.com/gtag/js?id={{ measurement_id }}"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', {{ measurement_id | tojson }});
+  </script>
+  <style>
+    body { font: 1rem/1.5 system-ui; max-width: 60rem; margin: 2rem auto; padding: 0 1rem; }
+    table { border-collapse: collapse; }
+    th, td { padding: .25rem 1rem .25rem 0; }
+    th { text-align: left; }
+    tbody th { font-weight: normal; overflow-wrap: anywhere; }
+    td { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body>
+  <main itemscope itemtype="https://schema.org/Dataset">
+    <h1 itemprop="name">OSM Countries GeoJSON</h1>
+    <link itemprop="url" href="{{ canonical }}">
+    <p itemprop="description">Country boundaries from OpenStreetMap in GeoJSON. Smaller numbers preserve more detail.</p>
+    <p>OpenStreetMap data as of
+      <time datetime="{{ source_time.isoformat() }}">{{ source_time.strftime('%d %B %Y, %H:%M') }} UTC</time>.
+    </p>
+    <table>
+      <caption>Downloads</caption>
+      <thead>
+        <tr><th scope="col">File</th><th scope="col">Size</th></tr>
+      </thead>
+      <tbody>
+        {% for name, item in files.items() if not name.endswith('.geojson') %}
+        <tr itemprop="distribution" itemscope itemtype="https://schema.org/DataDownload">
+          <th scope="row">
+            <a itemprop="contentUrl" href="/{{ name }}"><span itemprop="name">{{ name }}</span></a>
+            <meta itemprop="encodingFormat" content="{{ content_type(name) }}">
+          </th>
+          <td>
+            <data itemprop="contentSize" value="{{ item.size }} B" title="{{ '{:,}'.format(item.size) }} bytes">
+              {{ '{:,.2f}'.format(item.size / 1048576) }} MiB
+            </data>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <footer>
+      <p>© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>.
+        Licensed under <a itemprop="license" rel="license" href="https://opendatacommons.org/licenses/odbl/1-0/">ODbL 1.0</a>.
+        <a href="https://github.com/Zaczero/osm-countries-geojson">Generator source</a>.
+      </p>
+    </footer>
+  </main>
+</body>
+</html>

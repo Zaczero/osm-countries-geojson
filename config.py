@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 from decimal import Decimal
@@ -8,6 +9,7 @@ REVISION = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).stri
 VERSION = 'git#' + REVISION[:7]
 WEBSITE = 'https://github.com/Zaczero/osm-countries-geojson'
 USER_AGENT = f'{NAME}/{VERSION} (+{WEBSITE})'
+PUBLICATION: dict[str, str] = json.loads(Path(__file__).with_name('publication.json').read_text())
 
 OVERPASS_API_INTERPRETER = os.getenv('OVERPASS_API_INTERPRETER', 'https://overpass-api.de/api/interpreter')
 COUNTRIES_GEOJSON_URL = (

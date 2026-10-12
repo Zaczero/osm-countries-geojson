@@ -1,8 +1,11 @@
 [project]
 dependencies = [
+    "boto3",
     "brotli",
+    "cloudflare",
     "httpx-secure",
     "httpx",
+    "jinja2",
     "networkx",
     "numpy",
     "sentry-sdk",
@@ -14,7 +17,7 @@ requires-python = "~=3.14.0"
 version = "0.0.0"
 
 [dependency-groups]
-dev = ["brotli-stubs", "pytest", "types-networkx", "types-shapely"]
+dev = ["boto3-stubs[boto3,s3]", "brotli-stubs", "pytest", "types-networkx", "types-shapely"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
