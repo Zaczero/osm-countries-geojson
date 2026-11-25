@@ -44,7 +44,7 @@ jobs:
           --keep SENTRY_DSN --keep SENTRY_AUTH_TOKEN --keep GITHUB_RUN_ID
           --keep GITHUB_RUN_ATTEMPT --keep GITHUB_SHA
           --run "sentry-cli monitors run osm-countries-geojson
-          --schedule '$SENTRY_MONITOR_SCHEDULE' --
+          --schedule '$SENTRY_MONITOR_SCHEDULE' --check-in-margin 10 --
           bash -euc 'generate-geojson; publish-geojson;
           sentry-cli releases new \"$GITHUB_SHA\";
           sentry-cli releases set-commits \"$GITHUB_SHA\" --auto;
